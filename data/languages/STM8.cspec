@@ -2,6 +2,7 @@
 
 <compiler_spec>
 	<global>
+		<range space="ROM"/>
 		<range space="RAM"/>
 	</global>
 	<stackpointer register="SP" space="RAM"/>
