@@ -293,7 +293,7 @@ X_Y_92: X	is Pre92 & X { export X; }
 X_Y_92: Y	is Pre91 & Y { export Y; } 
 
 # full address
-Addr24: val24u is val24u { export *[RAM]:1 val24u; }
+Addr24: val24u is val24u { export *[ROM]:1 val24u; }
 
 
 
