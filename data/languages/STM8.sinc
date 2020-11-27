@@ -14,8 +14,8 @@
 # 
 define endian=big;
 define alignment=1;
-define space ROM type=ram_space size=$(ROM_W);
-define space RAM type=ram_space size=$(RAM_W) default;
+define space ROM type=ram_space size=$(ROM_W) default;
+define space RAM type=ram_space size=$(RAM_W);
 define space register type=register_space size=2;
 
 # this document uses following conventions: byte - 8 bits, word - 16 bits, dword - 24 bits (!!!)
@@ -139,30 +139,30 @@ macro unpack_flags(cc) {
 # commonly used operations
 
 macro pushb(val) {
-	*:1 SP = val;
+	*[RAM]:1 SP = val;
 	SP = SP - 1;
 }
 macro popb(val) {
 	SP = SP + 1;
-	val = *:1 SP;
+	val = *[RAM]:1 SP;
 }
 macro pushw(val) {
-	*:2 (SP - 1) = val;		#!!!
+	*[RAM]:2 (SP - 1) = val;		#!!!
 	SP = SP - 2;
 #	pushb(val[0,8]);	# sometimes it work better, sometimes not
 #	pushb(val[8,8]);
 }
 macro popw(val) {
 	SP = SP + 2;
-	val = *:2 (SP - 1);		#!!!
+	val = *[RAM]:2 (SP - 1);		#!!!
 }
 macro pushdw(val) {
-	*:3 (SP - 2)= val;		#!!!
+	*[RAM]:3 (SP - 2)= val;		#!!!
 	SP = SP - 3;
 }
 macro popdw(val) {
 	SP = SP + 3;
-	val = *:3 (SP - 2);		#!!!
+	val = *[RAM]:3 (SP - 2);		#!!!
 }
 
 macro exchange(a, b) {
@@ -263,22 +263,22 @@ Imm8u:	"#"^val8u		is val8u 	{ local x:1 = val8u; export x; }
 Imm16u:	"#"^val16u		is val16u 	{ local x:2 = val16u; export x; }
 
 # SP-relative addressing
-StackAddr8:		(val8u, SP) 	is val8u & SP {	local addr:$(RAM_W) = SP + val8u; export *:1 addr; }
-StackAddr8W:	(val8u, SP) 	is val8u & SP {	local addr:$(RAM_W) = SP + val8u; export *:2 addr; }
+StackAddr8:		(val8u, SP) 	is val8u & SP {	local addr:$(RAM_W) = SP + val8u; export *[RAM]:1 addr; }
+StackAddr8W:	(val8u, SP) 	is val8u & SP {	local addr:$(RAM_W) = SP + val8u; export *[RAM]:2 addr; }
 
 # jump offset
-offset8: addr	is val8s [ addr = inst_next + val8s; ] { export *:1 addr; }
+offset8: addr	is val8s [ addr = inst_next + val8s; ] { export *[RAM]:1 addr; }
 
 # 8-bit address (shortmem)
-Addr8B:		val8u		is val8u			{ export *:1 val8u; }
-Addr8W:		val8u		is val8u			{ export *:2 val8u; }
-Addr8B_2:	val8u		is val8u			{ export *:1 val8u; }
+Addr8B:		val8u		is val8u			{ export *[RAM]:1 val8u; }
+Addr8W:		val8u		is val8u			{ export *[RAM]:2 val8u; }
+Addr8B_2:	val8u		is val8u			{ export *[RAM]:1 val8u; }
 
 # 16-bit address (longmem)
-Addr16B:	val16u		is val16u			{ export *:1 val16u; }
-Addr16W:	val16u		is val16u			{ export *:2 val16u; }
-Addr16DW:	val16u		is val16u			{ export *:3 val16u; }
-Addr16B_2:	val16u		is val16u			{ export *:1 val16u; }
+Addr16B:	val16u		is val16u			{ export *[RAM]:1 val16u; }
+Addr16W:	val16u		is val16u			{ export *[RAM]:2 val16u; }
+Addr16DW:	val16u		is val16u			{ export *[RAM]:3 val16u; }
+Addr16B_2:	val16u		is val16u			{ export *[RAM]:1 val16u; }
 
 # prefix 0x90 changes X and Y registers
 X_Y:   X	is Pre00 & X  { export X; } 
@@ -293,7 +293,7 @@ X_Y_92: X	is Pre92 & X { export X; }
 X_Y_92: Y	is Pre91 & Y { export Y; } 
 
 # full address
-Addr24: val24u is val24u { export *:1 val24u; }
+Addr24: val24u is val24u { export *[RAM]:1 val24u; }
 
 
 
@@ -745,24 +745,24 @@ OneOp: StackAddr8	is Pre00 & op4_4=0x0; StackAddr8	{ export StackAddr8; }
 # -		0011 opcode	addr8	OP addr8			8-bit absolute address
 OneOp: Addr8B		is Pre00 & op4_4=0x3; Addr8B		{ export Addr8B; }
 # 72	0011 opcode	addr16	OP [addr16]			16-bit indirect address
-OneOp: [Addr16W]	is Pre72 & op4_4=0x3; Addr16W		{ local addr:$(RAM_W) = Addr16W; export *:1 addr; }
+OneOp: [Addr16W]	is Pre72 & op4_4=0x3; Addr16W		{ local addr:$(RAM_W) = Addr16W; export *[RAM]:1 addr; }
 # 92	0011 opcode	addr8	OP [addr8]			8-bit indirect address of 16-bit address
-OneOp: [Addr8W] 	is Pre92 & op4_4=0x3; Addr8W		{ local addr:$(RAM_W) = Addr8W; export *:1 addr; }
+OneOp: [Addr8W] 	is Pre92 & op4_4=0x3; Addr8W		{ local addr:$(RAM_W) = Addr8W; export *[RAM]:1 addr; }
 # -		0100 opcode	-		OP A				Accumulator
 OneOp: A			is Pre00 & op4_4=0x4 & A			{ export A; }
 # 72/90	0100 opcode	addr16	OP (addr16,X/Y)		Indexed with 16-bit offset
-OneOp: (Addr16B, X)	is Pre72 & op4_4=0x4 & X; Addr16B	{ local addr:$(RAM_W) = X + &Addr16B; export *:1 addr; }
-OneOp: (Addr16B, Y)	is Pre90 & op4_4=0x4 & Y; Addr16B	{ local addr:$(RAM_W) = Y + &Addr16B; export *:1 addr; }
+OneOp: (Addr16B, X)	is Pre72 & op4_4=0x4 & X; Addr16B	{ local addr:$(RAM_W) = X + &Addr16B; export *[RAM]:1 addr; }
+OneOp: (Addr16B, Y)	is Pre90 & op4_4=0x4 & Y; Addr16B	{ local addr:$(RAM_W) = Y + &Addr16B; export *[RAM]:1 addr; }
 # 72	0101 opcode	addr16	OP addr16			16-bit address
 OneOp: Addr16B		is Pre72 & op4_4=0x5 ; Addr16B		{ export Addr16B; }
 # -/90	0110 opcode	addr8	OP (addr8,X/Y)		8-bit address plus X/Y
-OneOp: (val8u, X_Y)	is         op4_4=0x6 & X_Y ; val8u	{ local addr:$(RAM_W) = X_Y + val8u; export *:1 addr; }
+OneOp: (val8u, X_Y)	is         op4_4=0x6 & X_Y ; val8u	{ local addr:$(RAM_W) = X_Y + val8u; export *[RAM]:1 addr; }
 # 72	0110 opcode	addr16	OP ([addr16],X)		16-bit indirect address plus X
-OneOp: ([Addr16W], X) is Pre72 & op4_4=0x6 & X; Addr16W	{ local addr:$(RAM_W) = X + Addr16W; export *:1 addr;  }
+OneOp: ([Addr16W], X) is Pre72 & op4_4=0x6 & X; Addr16W	{ local addr:$(RAM_W) = X + Addr16W; export *[RAM]:1 addr;  }
 # 92/91	0110 opcode	addr8	OP ([addr8],X/Y)	8-bit indirect address plus X/Y
-OneOp: ([Addr8W], X_Y_92) is op4_4=0x6 & X_Y_92; Addr8W	{ local addr:$(RAM_W) = X_Y_92 + Addr8W; export *:1 addr; }
+OneOp: ([Addr8W], X_Y_92) is op4_4=0x6 & X_Y_92; Addr8W	{ local addr:$(RAM_W) = X_Y_92 + Addr8W; export *[RAM]:1 addr; }
 # -/90	0111 opcode	-		OP (X/Y)			Indexed with no offset
-OneOp: (X_Y)		is           op4_4=0x7 & X_Y		{ export *:1 X_Y; }
+OneOp: (X_Y)		is           op4_4=0x7 & X_Y		{ export *[RAM]:1 X_Y; }
 
 # one-operand instructions only one addressing mode (16-bit operations)
 # -/90	0101 opcode	-		OPW X/Y				X/Y register (16-bit operation)
@@ -986,19 +986,19 @@ TwoOp:	Addr8B		is Pre00 & op4_4=0xB ; Addr8B			{ export Addr8B; }
 # -		1100 opcode	addr16	OP addr16			16-bit absolute address
 TwoOp:	Addr16B		is Pre00 & op4_4=0xC ; Addr16B			{ export Addr16B; }
 # 72	1100 opcode	addr16	OP [addr16]			16-bit indirect address
-TwoOp:	[Addr16W]	is Pre72 & op4_4=0xC ; Addr16W			{ local ptr:$(RAM_W) = Addr16W; export *:1 ptr; }
+TwoOp:	[Addr16W]	is Pre72 & op4_4=0xC ; Addr16W			{ local ptr:$(RAM_W) = Addr16W; export *[RAM]:1 ptr; }
 # 92	1100 opcode	addr8	OP [addr8]			8-bit indirect address of 16-bit address
-TwoOp:	[Addr8W]	is Pre92 & op4_4=0xC ; Addr8W 			{ local ptr:$(RAM_W) = Addr8W; export *:1 ptr; }
+TwoOp:	[Addr8W]	is Pre92 & op4_4=0xC ; Addr8W 			{ local ptr:$(RAM_W) = Addr8W; export *[RAM]:1 ptr; }
 # -/90	1101 opcode	addr16	OP (addr16,X/Y)		Indexed with 16-bit offset
-TwoOp:	(Addr16B, X_Y)	is op4_4=0xD & X_Y; Addr16B			{ local addr:$(RAM_W) = X_Y + &Addr16B; export *:1 addr; }
+TwoOp:	(Addr16B, X_Y)	is op4_4=0xD & X_Y; Addr16B			{ local addr:$(RAM_W) = X_Y + &Addr16B; export *[RAM]:1 addr; }
 # 72	1101 opcode	addr16	OP ([addr16],X)		16-bit indirect + X
-TwoOp:	([Addr16W], X) is Pre72 & op4_4=0xD & X; Addr16W	{ local addr:$(RAM_W) = X + Addr16W; export *:1 addr;  }
+TwoOp:	([Addr16W], X) is Pre72 & op4_4=0xD & X; Addr16W	{ local addr:$(RAM_W) = X + Addr16W; export *[RAM]:1 addr;  }
 # 92/91	1101 opcode	addr16	OP ([addr8],X/Y)	8-bit indirect + X/Y
-TwoOp:	([Addr8W], X_Y_92) is op4_4=0xD & X_Y_92; Addr8W	{ local addr:$(RAM_W) = X_Y_92 + Addr8W; export *:1 addr;  }
+TwoOp:	([Addr8W], X_Y_92) is op4_4=0xD & X_Y_92; Addr8W	{ local addr:$(RAM_W) = X_Y_92 + Addr8W; export *[RAM]:1 addr;  }
 # -/90	1110 opcode	addr8	OP (addr8,X/Y)		Indexed with 8-bit offset
-TwoOp:	(val8u, X_Y) is op4_4=0xE & X_Y ; val8u				{ local addr:$(RAM_W) = X_Y + val8u; export *:1 addr; }
+TwoOp:	(val8u, X_Y) is op4_4=0xE & X_Y ; val8u				{ local addr:$(RAM_W) = X_Y + val8u; export *[RAM]:1 addr; }
 # -/90	1111 opcode			OP (X/Y)			Indexed with no offset
-TwoOp:	(X_Y)		is op4_4=0xF & X_Y						{ export *:1 X_Y; }
+TwoOp:	(X_Y)		is op4_4=0xF & X_Y						{ export *[RAM]:1 X_Y; }
 
 # prefix	mode 0000	operand		SUB A,operand	A := A - operand
 :SUB A, TwoOp		is op0_4=0x0 ... & TwoOp & A {
@@ -1075,20 +1075,20 @@ TwoOpW:	Addr8W			is Pre90 & op4_4=0xB ; Addr8W		{ export Addr8W; }
 TwoOpW:	Addr16W			is Pre00 & op4_4=0xC ; Addr16W		{ export Addr16W; }
 TwoOpW:	Addr16W			is Pre90 & op4_4=0xC ; Addr16W		{ export Addr16W; }
 # 72	1100 opcode	addr16	OP [addr16]			16-bit indirect address
-TwoOpW:	[Addr16W]		is Pre72 & op4_4=0xC ; Addr16W		{ local ptr:$(RAM_W) = Addr16W; export *:2 ptr; }
+TwoOpW:	[Addr16W]		is Pre72 & op4_4=0xC ; Addr16W		{ local ptr:$(RAM_W) = Addr16W; export *[RAM]:2 ptr; }
 # 92	1100 opcode	addr8	OP [addr8]			8-bit indirect address of 16-bit address
-TwoOpW:	[Addr8W]		is Pre92 & op4_4=0xC ; Addr8W 		{ local ptr:$(RAM_W) = Addr8W; export *:2 ptr; }
-TwoOpW:	[Addr8W]		is Pre91 & op4_4=0xC ; Addr8W 		{ local ptr:$(RAM_W) = Addr8W; export *:2 ptr; }
+TwoOpW:	[Addr8W]		is Pre92 & op4_4=0xC ; Addr8W 		{ local ptr:$(RAM_W) = Addr8W; export *[RAM]:2 ptr; }
+TwoOpW:	[Addr8W]		is Pre91 & op4_4=0xC ; Addr8W 		{ local ptr:$(RAM_W) = Addr8W; export *[RAM]:2 ptr; }
 # -/90	1101 opcode	addr16	OP (addr16,X/Y)		Indexed with 16-bit offset
-TwoOpW: (Addr16W, X_Y)	is op4_4=0xD & X_Y; Addr16W			{ local addr:$(RAM_W) = X_Y + &Addr16W; export *:2 addr; }
+TwoOpW: (Addr16W, X_Y)	is op4_4=0xD & X_Y; Addr16W			{ local addr:$(RAM_W) = X_Y + &Addr16W; export *[RAM]:2 addr; }
 # 72	1101 opcode	addr16	OP ([addr16],X)		16-bit indirect + X
-TwoOpW: ([Addr16W], X)	is Pre72 & op4_4=0xD & X; Addr16W	{ local addr:$(RAM_W) = X + Addr16W; export *:2 addr;  }
+TwoOpW: ([Addr16W], X)	is Pre72 & op4_4=0xD & X; Addr16W	{ local addr:$(RAM_W) = X + Addr16W; export *[RAM]:2 addr;  }
 # 92/91	1101 opcode	addr16	OP ([addr8],X/Y)	8-bit indirect + X/Y
-TwoOpW: ([Addr8W], X_Y_92) is op4_4=0xD & X_Y_92; Addr8W	{ local addr:$(RAM_W) = X_Y_92 + Addr8W; export *:2 addr;  }
+TwoOpW: ([Addr8W], X_Y_92) is op4_4=0xD & X_Y_92; Addr8W	{ local addr:$(RAM_W) = X_Y_92 + Addr8W; export *[RAM]:2 addr;  }
 # -/90	1110 opcode	addr8	OP (addr8,X/Y)		Indexed with 8-bit offset
-TwoOpW: (val8u, X_Y)	is op4_4=0xE & X_Y ; val8u			{ local addr:$(RAM_W) = X_Y + val8u; export *:2 addr; }
+TwoOpW: (val8u, X_Y)	is op4_4=0xE & X_Y ; val8u			{ local addr:$(RAM_W) = X_Y + val8u; export *[RAM]:2 addr; }
 # -/90	1111 opcode			OP (X/Y)			Indexed with no offset
-TwoOpW: (X_Y)			is op4_4=0xF & X_Y					{ export *:2 X_Y; }
+TwoOpW: (X_Y)			is op4_4=0xF & X_Y					{ export *[RAM]:2 X_Y; }
 
 
 X_Y_LDW:	X			is (ctx_prefix=0x00 | ctx_prefix=0x92 | ctx_prefix=0x72) & X	{ export X; }
