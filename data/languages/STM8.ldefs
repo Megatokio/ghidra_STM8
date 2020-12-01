@@ -25,8 +25,8 @@
   </language>
   <language processor="STM8"
             endian="big"
-            size="16"
-            variant="mixed"
+            size="24"
+            variant="default"
             version="0.1"
             slafile="STM8_mixed.sla"
             processorspec="STM8.pspec"

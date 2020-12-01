@@ -11,8 +11,14 @@
 # 
 define endian=big;
 define alignment=1;
+@if RAM_W == ROM_W
+@define ROM "RAM"
+define space RAM type=ram_space size=$(RAM_W) default;
+@else
+@define ROM "ROM"
 define space ROM type=ram_space size=$(ROM_W) default;
 define space RAM type=ram_space size=$(RAM_W);
+@endif
 define space register type=register_space size=2;
 
 # this document uses following conventions: byte - 8 bits, word - 16 bits, dword - 24 bits (!!!)
@@ -260,7 +266,7 @@ StackAddr8:		(val8u, SP) 	is val8u & SP {	local addr:$(RAM_W) = SP + val8u; expo
 StackAddr8W:	(val8u, SP) 	is val8u & SP {	local addr:$(RAM_W) = SP + val8u; export *[RAM]:2 addr; }
 
 # jump offset
-offset8: addr	is val8s [ addr = inst_next + val8s; ] { export *[ROM]:1 addr; }
+offset8: addr	is val8s [ addr = inst_next + val8s; ] { export *[$(ROM)]:1 addr; }
 
 # 8-bit address (shortmem)
 Addr8B:		val8u		is val8u			{ export *[RAM]:1 val8u; }
@@ -286,7 +292,7 @@ X_Y_92: X	is Pre92 & X { export X; }
 X_Y_92: Y	is Pre91 & Y { export Y; } 
 
 # full address
-Addr24: val24u is val24u { export *[ROM]:1 val24u; }
+Addr24: val24u is val24u { export *[$(ROM)]:1 val24u; }
 
 
 
@@ -368,7 +374,7 @@ define pcodeop __DebugBreak;
 :CALLF [Addr16DW]	is Pre92 & op0_8=0x8D ; Addr16DW {
 	local pc:3 = inst_next;
 	pushdw(pc);
-	call Addr16DW;
+	call Addr16DW; # correct?
 }
 # -		1000 1110			HALT		Halt processor and clocks
 define pcodeop __Halt;
@@ -912,13 +918,13 @@ OneOpW: X_Y			is           op4_4=0x5 & X_Y		{ export X_Y; }
 # -/90	1010 0111  addr24	LDF (addr24,X/Y),A		Load far (=LD #imm8,A)
 :LDF (Addr24, X_Y), A		is X_Y & op0_8=0xA7 ; Addr24 & A {
 	local addr:$(ROM_W) = &Addr24 + zext(X_Y);
-	*[ROM]:1 addr = A;	# why load not working??
+	*[$(ROM)]:1 addr = A;	# why load not working??
 	flagNZ(A);
 }
 # 92/91	1010 0111  addr16	LDF ([addr16],X/Y),A	16-bit address of 24-bit pointer
 :LDF ([Addr16DW], X_Y_92), A	is X_Y_92 ; op0_8=0xA7 ; Addr16DW & A {
 	local addr:$(ROM_W) = Addr16DW:$(ROM_W) + zext(X_Y_92);
-	*[ROM]:1 addr = A;	# why load not working??
+	*[$(ROM)]:1 addr = A;	# why load not working??
 	flagNZ(A);
 }
 # -		1010 1100  addr24	JPF addr24				PC := addr24 (=JP #imm8)
@@ -939,7 +945,7 @@ OneOpW: X_Y			is           op4_4=0x5 & X_Y		{ export X_Y; }
 # 92	1011 1100  addr16	LDF A,[addr16]			Load far, 16-bit address of 24-bit pointer
 :LDF A, [Addr16DW]		is Pre92 & op0_8=0xBC ; Addr16DW & A {
 	local addr:$(ROM_W) = Addr16DW:$(ROM_W);
-	load(A, *[ROM]:1 addr);
+	load(A, *[$(ROM)]:1 addr);
 }
 # -		1010 1101  soff8	CALLR label				Push 16-bit PC, PC := PC + operand (=CALL #imm8)
 :CALLR offset8			is Pre00 & op0_8=0xAD ; offset8 {
@@ -953,18 +959,18 @@ OneOpW: X_Y			is           op4_4=0x5 & X_Y		{ export X_Y; }
 # 92	1011 1101  addr16	LDF [addr16],A			Operand := A, 16-bit address of 24-bit pointer
 :LDF [Addr16DW], A		is Pre92 & op0_8=0xBD ; Addr16DW & A {
 	local addr:$(ROM_W) = Addr16DW:$(ROM_W);
-	*[ROM]:1 addr = A;	# why load not working??
+	*[$(ROM)]:1 addr = A;	# why load not working??
 	flagNZ(A);
 }
 # -/90	1010 1111  addr24	LDF A,(addr24,X/Y)		Load far (=LDW #imm8,X)
 :LDF A, (Addr24, X_Y)		is op0_8=0xAF ; Addr24 & A & X_Y {
 	local addr:$(ROM_W) = &Addr24 + zext(X_Y);
-	load (A, *[ROM]:1 addr);
+	load (A, *[$(ROM)]:1 addr);
 }
 # 92/91	1010 1111  addr16	LDF A,([addr16],X/Y)	16-bit address of 24-bit pointer
 :LDF A, ([Addr16DW], X_Y_92)	is X_Y_92 ; op0_8=0xAF ; Addr16DW & A {
 	local addr:$(ROM_W) = Addr16DW:$(ROM_W) + zext(X_Y_92);
-	load (A, *[ROM]:1 addr);
+	load (A, *[$(ROM)]:1 addr);
 }
 
 
@@ -1041,16 +1047,6 @@ TwoOp:	(X_Y)		is op4_4=0xF & X_Y						{ export *[RAM]:1 X_Y; }
 :ADD A, TwoOp		is op0_4=0xB ... & TwoOp & A {
 	addb(A, TwoOp);
 }
-# prefix	mode 1100	operand		JP operand		Low 16 bits of PC := operand, unconditional jump (modes 2 JP #imm8 and 3 JP addr8 reassigned, see below)
-:JP TwoOp			is op0_4=0xC ... & TwoOp {
-	goto TwoOp;
-}
-# prefix	mode 1101	operand		CALL operand	Push 16-bit PC, low 16 bits of PC := operand (modes 2 CALL #imm8 and 3 CALL addr8 reassigned, see below)
-:CALL TwoOp		is op0_4=0xD ... & TwoOp {
-	local pc:2 = inst_next;
-	pushw(pc);
-	call TwoOp;
-}
 
 # two-operand instructions addressing modes (16-bit operations)
 # CPW/LDW is a special case: prefix modifies both operands
@@ -1106,3 +1102,34 @@ Y_X_LDW:	X			is (ctx_prefix=0x90 | ctx_prefix=0x91)					 & X	{ export X; }
 
 
 
+
+# -		1100 opcode	addr16	OP addr16			16-bit absolute address
+TwoOpJC:	val16u		is Pre00 & op4_4=0xC ; val16u			{													export *[$(ROM)]:1 val16u; }
+# 72	1100 opcode	addr16	OP [addr16]			16-bit indirect address
+TwoOpJC:	[Addr16W]	is Pre72 & op4_4=0xC ; Addr16W			{ local addr:$(ROM_W) = zext(Addr16W);				export *[$(ROM)]:1 addr; }
+# 92	1100 opcode	addr8	OP [addr8]			8-bit indirect address of 16-bit address
+TwoOpJC:	[Addr8W]	is Pre92 & op4_4=0xC ; Addr8W 			{ local addr:$(ROM_W) = zext(Addr8W);				export *[$(ROM)]:1 addr; }
+
+# -/90	1101 opcode	addr16	OP (addr16,X/Y)		Indexed with 16-bit offset
+TwoOpJC:	(val16u, X_Y)	is op4_4=0xD & X_Y; val16u			{ local addr:$(ROM_W) = zext(X_Y) + val16u;			export *[$(ROM)]:1 addr; }
+# 72	1101 opcode	addr16	OP ([addr16],X)		16-bit indirect + X
+TwoOpJC:	([Addr16W], X) is Pre72 & op4_4=0xD & X; Addr16W	{ local addr:$(ROM_W) = zext(X) + zext(Addr16W);	export *[$(ROM)]:1 addr; }
+# 92/91	1101 opcode	addr16	OP ([addr8],X/Y)	8-bit indirect + X/Y
+TwoOpJC:	([Addr8W], X_Y_92) is op4_4=0xD & X_Y_92; Addr8W	{ local addr:$(ROM_W) = zext(X_Y_92) + zext(Addr8W); export *[$(ROM)]:1 addr; }
+
+# -/90	1110 opcode	addr8	OP (addr8,X/Y)		Indexed with 8-bit offset
+TwoOpJC:	(val8u, X_Y) is op4_4=0xE & X_Y ; val8u				{ local addr:$(ROM_W) = zext(X_Y) + val8u;			export *[$(ROM)]:1 addr; }
+
+# -/90	1111 opcode			OP (X/Y)			Indexed with no offset
+TwoOpJC:	(X_Y)		is op4_4=0xF & X_Y						{													export *[$(ROM)]:1 X_Y; }
+
+# prefix	mode 1100	operand		JP operand		Low 16 bits of PC := operand, unconditional jump (modes 2 JP #imm8 and 3 JP addr8 reassigned, see below)
+:JP TwoOpJC			is op0_4=0xC ... & TwoOpJC {
+	call TwoOpJC;
+}
+# prefix	mode 1101	operand		CALL operand	Push 16-bit PC, low 16 bits of PC := operand (modes 2 CALL #imm8 and 3 CALL addr8 reassigned, see below)
+:CALL TwoOpJC		is op0_4=0xD ... & TwoOpJC {
+	local pc:2 = inst_next;
+	pushw(pc);
+	call TwoOpJC;
+}

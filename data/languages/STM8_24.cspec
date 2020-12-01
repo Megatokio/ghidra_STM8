@@ -3,6 +3,7 @@
 <compiler_spec>
 	<global>
 		<range space="RAM"/>
+		<range space="ROM"/>
 	</global>
 	<stackpointer register="SP" space="RAM"/>
 	<returnaddress>
